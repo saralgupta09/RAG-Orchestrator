@@ -8,6 +8,9 @@ from workflow.grade_documents_node import (
     grade_documents
 )
 from workflow.generate_node import generate
+from workflow.hallucination_check_node import (
+    hallucination_check
+)
 
 
 def build_rag_graph():
@@ -30,6 +33,11 @@ def build_rag_graph():
         generate
     )
 
+    workflow.add_node(
+        "hallucination_check",
+        hallucination_check
+    )
+
     # Entry point
     workflow.set_entry_point("retrieve")
 
@@ -46,6 +54,11 @@ def build_rag_graph():
 
     workflow.add_edge(
         "generate",
+        "hallucination_check"
+    )
+
+    workflow.add_edge(
+        "hallucination_check",
         END
     )
 
