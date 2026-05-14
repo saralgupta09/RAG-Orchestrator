@@ -9,3 +9,5 @@ class GraphState(TypedDict):
     documents: List[Document]
 
     generation: str
+
+    sources: list

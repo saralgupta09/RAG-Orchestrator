@@ -14,8 +14,18 @@ def generate(state: GraphState):
         question
     )
 
+    sources = []
+
+    for i, doc in enumerate(documents):
+
+        sources.append({
+            "source_id": i + 1,
+            "content": doc.page_content[:500]
+        })
+
     return {
         "question": question,
         "documents": documents,
-        "generation": generation
+        "generation": generation,
+        "sources": sources
     }

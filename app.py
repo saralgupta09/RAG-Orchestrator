@@ -159,6 +159,7 @@ if query:
         response = result["generation"]
 
         retrieved_docs = result["documents"]
+        sources = result.get("sources", [])
 
         # Store assistant response
         st.session_state.messages.append({
@@ -172,17 +173,15 @@ if query:
             st.markdown(response)
 
             # Retrieved context
-            with st.expander("Retrieved Context"):
+            with st.expander("Sources and Retrieved Context"):
 
-                for i, doc in enumerate(retrieved_docs):
+                for source in sources:
 
                     st.markdown(
-                        f"### Result {i + 1}"
+                        f"### Source {source['source_id']}"
                     )
 
-                    st.write(
-                        doc.page_content[:1000]
-                    )
+                    st.write(source["content"])
 
                     st.divider()
 
