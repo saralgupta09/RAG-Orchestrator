@@ -1,6 +1,7 @@
 import os
 import streamlit as st
 from dotenv import load_dotenv
+from chains.rag_chain import generate_answer
 
 from ingestion.document_loader import load_pdf_documents
 from ingestion.text_splitter import split_documents
@@ -106,7 +107,6 @@ st.subheader("Ask Questions")
 query = st.text_input(
     "Enter your question"
 )
-
 if query:
 
     try:
@@ -120,19 +120,31 @@ if query:
         retrieved_docs = retriever.invoke(query)
 
         if not retrieved_docs:
+
             st.warning("No relevant documents found.")
 
         else:
 
-            st.subheader("Retrieved Context")
+            with st.spinner("Generating answer..."):
 
-            for i, doc in enumerate(retrieved_docs):
+                answer = generate_answer(
+                    retrieved_docs,
+                    query
+                )
 
-                st.markdown(f"### Result {i + 1}")
+            st.subheader("Answer")
 
-                st.write(doc.page_content[:1000])
+            st.write(answer)
 
-                st.divider()
+            with st.expander("Retrieved Context"):
+
+                for i, doc in enumerate(retrieved_docs):
+
+                    st.markdown(f"### Result {i + 1}")
+
+                    st.write(doc.page_content[:1000])
+
+                    st.divider()
 
     except Exception as e:
 
