@@ -1,4 +1,5 @@
 import os
+import time
 import streamlit as st
 from dotenv import load_dotenv
 
@@ -17,108 +18,149 @@ UPLOAD_DIR = "data/uploads"
 
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
+# ==========================================
+# PAGE CONFIG
+# ==========================================
+
 st.set_page_config(
     page_title="Adaptive RAG Assistant",
     page_icon="🤖",
     layout="wide"
 )
 
+# ==========================================
+# CUSTOM STYLING
+# ==========================================
+
+st.markdown(
+    """
+    <style>
+        .main {
+            padding-top: 1rem;
+        }
+
+        .stChatMessage {
+            padding: 12px;
+            border-radius: 12px;
+        }
+
+        .st-emotion-cache-1c7y2kd {
+            border-radius: 12px;
+        }
+
+        .block-container {
+            padding-top: 2rem;
+        }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
+
+# ==========================================
+# SIDEBAR
+# ==========================================
+
+with st.sidebar:
+
+    st.title("⚙️ Settings")
+
+    st.markdown("---")
+
+    st.subheader("📄 Document Upload")
+
+    uploaded_files = st.file_uploader(
+        "Upload PDF files",
+        type=["pdf"],
+        accept_multiple_files=True
+    )
+
+    st.markdown("---")
+
+    if st.button("🗑️ Clear Chat History"):
+
+        st.session_state.messages = []
+
+        st.success("Chat history cleared")
+
+# ==========================================
+# MAIN HEADER
+# ==========================================
+
 st.title("🤖 Adaptive RAG Assistant")
 
 st.markdown(
     """
-    Upload documents and ask context-aware questions using
-    LangGraph + LangChain + ChromaDB.
+    An advanced Retrieval-Augmented Generation (RAG)
+    system powered by LangGraph, LangChain,
+    ChromaDB, and NVIDIA-hosted LLMs.
     """
 )
 
-# =========================
-# FILE UPLOAD
-# =========================
+# ==========================================
+# SESSION STATE
+# ==========================================
 
-uploaded_files = st.file_uploader(
-    "Upload PDF Documents",
-    type=["pdf"],
-    accept_multiple_files=True
-)
-
-all_chunks = []
-
-# =========================
-# DOCUMENT INGESTION
-# =========================
-
-if uploaded_files:
-
-    for uploaded_file in uploaded_files:
-
-        save_path = os.path.join(
-            UPLOAD_DIR,
-            uploaded_file.name
-        )
-
-        with open(save_path, "wb") as f:
-            f.write(uploaded_file.getbuffer())
-
-        documents = load_pdf_documents(save_path)
-
-        st.write(f"Pages loaded: {len(documents)}")
-
-        if not documents:
-
-            st.warning(
-                f"No readable text found in "
-                f"{uploaded_file.name}"
-            )
-
-            continue
-
-        chunks = split_documents(documents)
-
-        st.write(f"Chunks created: {len(chunks)}")
-
-        all_chunks.extend(chunks)
-
-        st.success(
-            f"{uploaded_file.name} processed successfully"
-        )
-
-    # Create vector database
-    if all_chunks:
-
-        with st.spinner("Creating vector embeddings..."):
-
-            create_vector_store(all_chunks)
-
-        st.success("Vector store created successfully")
-
-    st.write(
-        f"Total chunks created: {len(all_chunks)}"
-    )
-
-    # Chunk preview
-    with st.expander("Preview Chunks"):
-
-        for chunk in all_chunks[:3]:
-
-            st.write(
-                chunk.page_content[:500]
-            )
-
-            st.divider()
-
-# =========================
-# LANGGRAPH CHAT INTERFACE
-# =========================
-
-st.divider()
-
-st.subheader("Chat with your documents")
-
-# Session state for chat history
 if "messages" not in st.session_state:
 
     st.session_state.messages = []
+
+# ==========================================
+# DOCUMENT INGESTION
+# ==========================================
+
+all_chunks = []
+
+if uploaded_files:
+
+    with st.spinner("Processing documents..."):
+
+        for uploaded_file in uploaded_files:
+
+            save_path = os.path.join(
+                UPLOAD_DIR,
+                uploaded_file.name
+            )
+
+            with open(save_path, "wb") as f:
+
+                f.write(uploaded_file.getbuffer())
+
+            documents = load_pdf_documents(
+                save_path
+            )
+
+            if not documents:
+
+                st.warning(
+                    f"No readable text found in "
+                    f"{uploaded_file.name}"
+                )
+
+                continue
+
+            chunks = split_documents(
+                documents
+            )
+
+            all_chunks.extend(chunks)
+
+        # Create vector store
+        if all_chunks:
+
+            create_vector_store(all_chunks)
+
+            st.success(
+                f"Processed {len(uploaded_files)} "
+                f"document(s) successfully"
+            )
+
+# ==========================================
+# CHAT SECTION
+# ==========================================
+
+st.markdown("---")
+
+st.subheader("💬 Chat with Your Documents")
 
 # Display chat history
 for message in st.session_state.messages:
@@ -129,7 +171,7 @@ for message in st.session_state.messages:
 
 # User input
 query = st.chat_input(
-    "Ask a question about your uploaded documents"
+    "Ask questions about your uploaded documents..."
 )
 
 if query:
@@ -147,10 +189,13 @@ if query:
 
     try:
 
-        # Build graph
+        start_time = time.time()
+
         rag_graph = build_rag_graph()
 
-        with st.spinner("Running LangGraph workflow..."):
+        with st.spinner(
+            "Running adaptive RAG workflow..."
+        ):
 
             result = rag_graph.invoke({
                 "question": query
@@ -158,8 +203,19 @@ if query:
 
         response = result["generation"]
 
+        sources = result.get(
+            "sources",
+            []
+        )
+
         retrieved_docs = result["documents"]
-        sources = result.get("sources", [])
+
+        end_time = time.time()
+
+        response_time = round(
+            end_time - start_time,
+            2
+        )
 
         # Store assistant response
         st.session_state.messages.append({
@@ -172,16 +228,26 @@ if query:
 
             st.markdown(response)
 
-            # Retrieved context
-            with st.expander("Sources and Retrieved Context"):
+            st.caption(
+                f"Response generated in "
+                f"{response_time} seconds"
+            )
+
+            # Sources
+            with st.expander(
+                "📚 Retrieved Sources"
+            ):
 
                 for source in sources:
 
                     st.markdown(
-                        f"### Source {source['source_id']}"
+                        f"### Source "
+                        f"{source['source_id']}"
                     )
 
-                    st.write(source["content"])
+                    st.write(
+                        source["content"]
+                    )
 
                     st.divider()
 
