@@ -4,13 +4,20 @@ from langgraph.graph import END
 from workflow.state import GraphState
 
 from workflow.retrieve_node import retrieve
+
 from workflow.grade_documents_node import (
     grade_documents
 )
+
 from workflow.generate_node import generate
+
 from workflow.hallucination_check_node import (
     hallucination_check
 )
+
+from workflow.web_search_node import web_search
+
+from workflow.router import route_question
 
 
 def build_rag_graph():
@@ -26,6 +33,11 @@ def build_rag_graph():
     workflow.add_node(
         "grade_documents",
         grade_documents
+    )
+
+    workflow.add_node(
+        "web_search",
+        web_search
     )
 
     workflow.add_node(
@@ -47,8 +59,18 @@ def build_rag_graph():
         "grade_documents"
     )
 
-    workflow.add_edge(
+    # Conditional routing
+    workflow.add_conditional_edges(
         "grade_documents",
+        route_question,
+        {
+            "web_search": "web_search",
+            "generate": "generate"
+        }
+    )
+
+    workflow.add_edge(
+        "web_search",
         "generate"
     )
 
