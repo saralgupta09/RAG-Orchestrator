@@ -1,14 +1,14 @@
 import os
 import streamlit as st
 from dotenv import load_dotenv
-from chains.rag_chain import generate_answer
+
+from workflow.rag_graph import build_rag_graph
 
 from ingestion.document_loader import load_pdf_documents
 from ingestion.text_splitter import split_documents
 
 from vectorstore.chroma_store import (
-    create_vector_store,
-    load_vector_store
+    create_vector_store
 )
 
 load_dotenv()
@@ -31,6 +31,10 @@ st.markdown(
     LangGraph + LangChain + ChromaDB.
     """
 )
+
+# =========================
+# FILE UPLOAD
+# =========================
 
 uploaded_files = st.file_uploader(
     "Upload PDF Documents",
@@ -61,9 +65,12 @@ if uploaded_files:
         st.write(f"Pages loaded: {len(documents)}")
 
         if not documents:
+
             st.warning(
-                f"No readable text found in {uploaded_file.name}"
+                f"No readable text found in "
+                f"{uploaded_file.name}"
             )
+
             continue
 
         chunks = split_documents(documents)
@@ -76,7 +83,7 @@ if uploaded_files:
             f"{uploaded_file.name} processed successfully"
         )
 
-    # Create vector DB only once
+    # Create vector database
     if all_chunks:
 
         with st.spinner("Creating vector embeddings..."):
@@ -85,67 +92,102 @@ if uploaded_files:
 
         st.success("Vector store created successfully")
 
-    st.write(f"Total chunks created: {len(all_chunks)}")
+    st.write(
+        f"Total chunks created: {len(all_chunks)}"
+    )
 
-    # Preview chunks
+    # Chunk preview
     with st.expander("Preview Chunks"):
 
         for chunk in all_chunks[:3]:
 
-            st.write(chunk.page_content[:500])
+            st.write(
+                chunk.page_content[:500]
+            )
 
             st.divider()
 
 # =========================
-# QUESTION ANSWERING
+# LANGGRAPH CHAT INTERFACE
 # =========================
 
 st.divider()
 
-st.subheader("Ask Questions")
+st.subheader("Chat with your documents")
 
-query = st.text_input(
-    "Enter your question"
+# Session state for chat history
+if "messages" not in st.session_state:
+
+    st.session_state.messages = []
+
+# Display chat history
+for message in st.session_state.messages:
+
+    with st.chat_message(message["role"]):
+
+        st.markdown(message["content"])
+
+# User input
+query = st.chat_input(
+    "Ask a question about your uploaded documents"
 )
+
 if query:
+
+    # Store user message
+    st.session_state.messages.append({
+        "role": "user",
+        "content": query
+    })
+
+    # Display user message
+    with st.chat_message("user"):
+
+        st.markdown(query)
 
     try:
 
-        vector_store = load_vector_store()
+        # Build graph
+        rag_graph = build_rag_graph()
 
-        retriever = vector_store.as_retriever(
-            search_kwargs={"k": 3}
-        )
+        with st.spinner("Running LangGraph workflow..."):
 
-        retrieved_docs = retriever.invoke(query)
+            result = rag_graph.invoke({
+                "question": query
+            })
 
-        if not retrieved_docs:
+        response = result["generation"]
 
-            st.warning("No relevant documents found.")
+        retrieved_docs = result["documents"]
 
-        else:
+        # Store assistant response
+        st.session_state.messages.append({
+            "role": "assistant",
+            "content": response
+        })
 
-            with st.spinner("Generating answer..."):
+        # Display assistant response
+        with st.chat_message("assistant"):
 
-                answer = generate_answer(
-                    retrieved_docs,
-                    query
-                )
+            st.markdown(response)
 
-            st.subheader("Answer")
-
-            st.write(answer)
-
+            # Retrieved context
             with st.expander("Retrieved Context"):
 
                 for i, doc in enumerate(retrieved_docs):
 
-                    st.markdown(f"### Result {i + 1}")
+                    st.markdown(
+                        f"### Result {i + 1}"
+                    )
 
-                    st.write(doc.page_content[:1000])
+                    st.write(
+                        doc.page_content[:1000]
+                    )
 
                     st.divider()
 
     except Exception as e:
 
-        st.error(f"Retrieval error: {str(e)}")
+        st.error(
+            f"Workflow error: {str(e)}"
+        )
